@@ -23,7 +23,7 @@ def run(code_description):
     print("Generating query keywords...")
     # 1. LLM 生成关键词
     keywords = get_query_keywords(code_description).split(',')
-    keywords = [keyword.lower().strip() for keyword in keywords]
+    keywords = [keyword.lower().strip() for keyword in keywords][:1]
     print(keywords)
 
     # 2. 判断有无缓存

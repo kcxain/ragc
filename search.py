@@ -7,6 +7,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from github import Github
 gh_token = os.getenv('GH_TOKEN')
+g = Github(gh_token)
 
 def make_request(url, params=None):
     """Make a request with rate limit handling."""
@@ -32,14 +33,12 @@ def make_request(url, params=None):
             time.sleep(5)  # Wait for some time before retrying
 
 
-def check_readme(repo_name):
-    contents_url = f'https://api.github.com/repos/{repo_name}/contents'
-    response = make_request(contents_url)
-    
-    if response.status_code != 200:
-        return False, None
-
-    files = response.json()
+def check_readme(repo):
+    try:
+        contents = repo.get_contents("")
+    except Exception as e:
+        print(f"Error: {e}")
+        return False, False
     
     source_file_extensions = [
         '.py', '.js', '.ts', '.cpp', '.c', '.java', '.rb', 
@@ -47,64 +46,55 @@ def check_readme(repo_name):
         '.rs', '.cu'
     ]
     
-    readme_path = None
-    contains_source_file = False
+    contains_readme = False
+    contains_source = False
 
-    for file in files:
-        if file['type'] == 'file':
-            if any(file['name'].endswith(ext) for ext in source_file_extensions):
-                contains_source_file = True
-            if file['name'].lower().startswith('readme'):
-                readme_path = file['name']
+    for file in contents:
+        if file.type == 'file':
+            if any(file.name.endswith(ext) for ext in source_file_extensions):
+                contains_source = True
+            if file.name.lower().startswith('readme'):
+                contains_readme = True
 
-    if contains_source_file and readme_path:
-        return True, readme_path
-    return False, None
+    return contains_source, contains_readme
 
 
 def search_github(keywords: list, pages):
     cnt = 0
     if isinstance(keywords, str):
         keywords = [keywords]
-        
-    url = 'https://api.github.com/search/repositories'
+
     repos = []
     repos_set = set()
     for keyword in keywords:
-        for i in range(1, pages+1):
-            params = {
-                'q': f'{keyword}',
-                'sort': 'updated',
-                'order': 'desc',
-                'page': i
-            }
-            response = make_request(url, params=params)
-            data = response.json()
-            if 'items' not in data:
-                break
-            if not data['items']:
-                break
-            for repo in data['items']:
-                repo_name = repo['full_name']
-                if repo_name in repos_set:
-                    continue
-                else:
-                    repos_set.add(repo_name)
+        repositories = g.search_repositories(query=keyword,sort='updated',order='desc')
+        print(f'Totle repo: {repositories.totalCount}')
+        cnt = 0
+        for repo in repositories:
+            rate_limit = g.get_rate_limit().core
+            if rate_limit.remaining == 0:
+                wait_time = rate_limit.reset.timestamp() - time.time()
+                print(f"Rate limit exceeded, sleeping for {wait_time} seconds")
+                time.sleep(wait_time+1)
+            repo_name = repo.full_name
+            if repo_name in repos_set:
+                continue
+            else:
+                repos_set.add(repo_name)
 
-                contains_source, readme_path = check_readme(repo_name)
-                if not contains_source:
-                    continue
-                meta_data = {
-                    'repo_name' : repo['full_name'],
-                    'repo_desc' : repo['description'],
-                    'readme_name': readme_path,
-                    'star': repo['stargazers_count'],
-                }
-                repos.append(meta_data)
-                cnt += 1
-                print(f'{cnt}:  {meta_data}')
+            contains_source, contains_readme = check_readme(repo)
+            if not contains_source or not contains_readme:
+                continue
+            meta_data = {
+                'repo_name' : repo.full_name,
+                'repo_desc' : repo.description,
+                'star': repo.stargazers_count,
+            }
+            repos.append(repo)
+            cnt += 1
+            print(f'{cnt}:  {meta_data}')
         time.sleep(10)
-    print(f'\nTotal {cnt} repos!\n')
+    print(f'Total {cnt} valid repos!')
     return repos
             
 

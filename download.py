@@ -12,10 +12,13 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 from search import make_request
-lock = threading.Lock()
-
-load_dotenv()
+from github import Github
+import time
 gh_token = os.getenv('GH_TOKEN')
+g = Github(gh_token)
+
+lock = threading.Lock()
+load_dotenv()
 
 headers = {
             'Authorization': f'token {gh_token}',
@@ -32,23 +35,27 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 
 def download_process(repo, db: FAISS):
-    repo_name = repo['repo_name']
-    readme_name = repo['readme_name']
-    print(repo_name)
-    print(readme_name)
-    url = f'https://api.github.com/repos/{repo_name}/contents/{readme_name}'
-    response = make_request(url)
-    if response.status_code == 200:
-        content = response.json().get('content', None)
-        if content:
-            decoded_content = base64.b64decode(content).decode('utf-8')
-            docu = Document(
-                page_content=decoded_content,
-                metadata=repo
-            )
-            split_docu = text_splitter.split_documents([docu])
-            with lock:
-                db.add_documents(split_docu)
+    rate_limit = g.get_rate_limit().core
+    if rate_limit.remaining == 0:
+        wait_time = rate_limit.reset.timestamp() - time.time()
+        print(f"Rate limit exceeded, sleeping for {wait_time} seconds")
+        time.sleep(wait_time+1)
+    try:
+        readme_content = repo.get_readme().decoded_content.decode("utf-8")
+    except Exception as e:
+        print(f"Error fetching README: {e}")
+    if readme_content:
+        docu = Document(
+            page_content=readme_content,
+            metadata={
+                'repo_name' : repo.full_name,
+                'repo_desc' : repo.description,
+                'star': repo.stargazers_count,
+            }
+        )
+        split_docu = text_splitter.split_documents([docu])
+        with lock:
+            db.add_documents(split_docu)
             
 
 def load_readme(repos, db: FAISS):
@@ -60,7 +67,7 @@ def load_readme(repos, db: FAISS):
             try:
                 future.result()
             except Exception as e:
-                print(f"{repo['repo_name']} download error: {e}")
+                print(f"{repo.full_name} download error: {e}")
 
 def clone_github_repo(repo_name, destination=None):
     repo_url = f"https://github.com/{repo_name}.git"
