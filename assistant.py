@@ -8,6 +8,8 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_openai import OpenAIEmbeddings
 from search import search_github
 from download import load_readme, clone_github_repo
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
 load_dotenv()
 
 openai_key = os.getenv('OPENAI_API_KEY')
@@ -44,7 +46,12 @@ def run(code_description):
         db_file_name = '-'.join(keywords).lower()
         vector_store.save_local(f'./db/{db_file_name}')
     # 5. 检索最相似的仓库
-    similar_repo = vector_store.similarity_search(code_description, k=1)
+    bm25_retriever = BM25Retriever.from_documents(vector_store.docstore._dict.values())
+    faiss_retriever = vector_store.as_retriever()
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, faiss_retriever], weights=[0.6, 0.4]
+    )
+    similar_repo = ensemble_retriever.invoke(code_description)[0].metadata
     print(f"Best matching repository: {similar_repo}")
 
     # 6. 下载到本地
