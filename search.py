@@ -6,6 +6,7 @@ load_dotenv()
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from github import Github
+import json
 gh_token = os.getenv('GH_TOKEN')
 g = Github(gh_token)
 
@@ -32,6 +33,12 @@ def make_request(url, params=None):
             print(f"An error occurred: {e}")
             time.sleep(5)  # Wait for some time before retrying
 
+def save_json(data, file_path):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+    print(f"save repos to {file_path}")
 
 def check_readme(repo):
     try:
@@ -67,9 +74,9 @@ def search_github(keywords: list, pages):
     repos = []
     repos_set = set()
     for keyword in keywords:
+        meta_json = []
         repositories = g.search_repositories(query=keyword,sort='updated',order='desc')
         print(f'Totle repo: {repositories.totalCount}')
-        cnt = 0
         for repo in repositories:
             rate_limit = g.get_rate_limit().core
             if rate_limit.remaining == 0:
@@ -92,7 +99,9 @@ def search_github(keywords: list, pages):
             }
             repos.append(repo)
             cnt += 1
+            meta_json.append(meta_data)
             print(f'{cnt}:  {meta_data}')
+        save_json(meta_json, f'./{keyword}.json')
         time.sleep(10)
     print(f'Total {cnt} valid repos!')
     return repos

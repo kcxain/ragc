@@ -83,5 +83,5 @@ def get_query_keywords(function_description):
     return llm.invoke(prompt).content
     
 if __name__ == '__main__':
-    user_input = "Gaussian Splatting with C kernel"
+    user_input = "Gaussian Splatting with C kernel on the CPU"
     run(user_input)
