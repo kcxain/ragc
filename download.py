@@ -9,6 +9,8 @@ from search import search_github
 from langchain_community.vectorstores import FAISS
 import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.schema import Document
 from search import make_request
 lock = threading.Lock()
 
@@ -24,6 +26,13 @@ headers = {
         }
 embeddings = OpenAIEmbeddings()
 
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=150,
+    chunk_overlap=30,
+    length_function=len,
+    is_separator_regex=False,
+)
+
 def download_process(repo, db: FAISS):
     repo_name = repo['repo_name']
     readme_name = repo['readme_name']
@@ -35,9 +44,14 @@ def download_process(repo, db: FAISS):
         content = response.json().get('content', None)
         if content:
             decoded_content = base64.b64decode(content).decode('utf-8')
+            docu = Document(
+                page_content=decoded_content,
+                metadata=repo
+            )
+            split_docu = text_splitter.split_documents([docu])
             with lock:
-                print(decoded_content)
-                db.add_texts([decoded_content], [repo])
+                print(docu)
+                db.add_documents(split_docu)
             
 
 def load_readme(repos, db: FAISS):
