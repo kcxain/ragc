@@ -1,5 +1,5 @@
 import os
-import requests
+import subprocess
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -15,8 +15,6 @@ from search import make_request
 lock = threading.Lock()
 
 load_dotenv()
-openai_key = os.getenv('OPENAI_API_KEY')
-deepseek_key = os.getenv('DEEPSEEK_API_KEY')
 gh_token = os.getenv('GH_TOKEN')
 
 headers = {
@@ -64,6 +62,18 @@ def load_readme(repos, db: FAISS):
                 future.result()
             except Exception as e:
                 print(f"{repo['repo_name']} download error: {e}")
+
+def clone_github_repo(repo_name, destination=None):
+    repo_url = f"https://github.com/{repo_name}.git"
+    
+    if destination is None:
+        destination = repo_name.split('/')[-1]
+    
+    try:
+        result = subprocess.run(["git", "clone", repo_url, destination], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"Clone: {repo_name} to {destination}")
+    except subprocess.CalledProcessError as e:
+        print(f"Clone error: {e.stderr.decode()}")
 
 if __name__ == '__main__':
     vector_store = FAISS(
