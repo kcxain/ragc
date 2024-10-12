@@ -48,7 +48,6 @@ def download_process(repo, db: FAISS):
             )
             split_docu = text_splitter.split_documents([docu])
             with lock:
-                print(docu)
                 db.add_documents(split_docu)
             
 

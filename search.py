@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+from github import Github
 gh_token = os.getenv('GH_TOKEN')
 
 def make_request(url, params=None):
@@ -104,7 +104,7 @@ def search_github(keywords: list, pages):
                 cnt += 1
                 print(f'{cnt}:  {meta_data}')
         time.sleep(10)
-        
+    print(f'\nTotal {cnt} repos!\n')
     return repos
             
 

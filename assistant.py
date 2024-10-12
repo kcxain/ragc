@@ -32,7 +32,7 @@ def run(code_description):
         vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
     else:
     # 3. 返回仓库列表
-        repos = search_github(keywords, 100)
+        repos = search_github(keywords, 1)
     # 4. 下载所有仓库readme到数据库
         vector_store = FAISS(
                         embedding_function=embeddings,
