@@ -33,7 +33,6 @@ def download_process(repo, db: FAISS):
     response = make_request(url)
     if response.status_code == 200:
         content = response.json().get('content', None)
-        decoded_content = base64.b64decode(content).decode('utf-8')
         if content:
             decoded_content = base64.b64decode(content).decode('utf-8')
             with lock:

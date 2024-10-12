@@ -8,31 +8,31 @@ openai_key = os.getenv('OPENAI_API_KEY')
 deepseek_key = os.getenv('DEEPSEEK_API_KEY')
 gh_token = os.getenv('GH_TOKEN')
 
-class CodeGenerator:
-    def __init__(self):
-        self.llm = ChatOpenAI(
-            api_key=deepseek_key, 
-            base_url="https://api.deepseek.com",
-            model='deepseek-chat')
+# class CodeGenerator:
+#     def __init__(self):
+#         self.llm = ChatOpenAI(
+#             api_key=deepseek_key, 
+#             base_url="https://api.deepseek.com",
+#             model='deepseek-chat')
 
-    def generate_code(self, repo_path, user_input, code_content):
-        if not code_content:
-            print("No suitable code files found in the repository.")
+#     def generate_code(self, repo_path, user_input, code_content):
+#         if not code_content:
+#             print("No suitable code files found in the repository.")
 
-        code_generation_prompt = """
-        Here is the user's functional requirement: {function_description}.
-        This is the code content cloned from the GitHub repository {repo_path}:
-        {code_content}
-        Please generate the code that meets the user's requirement based on this information.
-        """
-        print(code_content)
-        prompt = code_generation_prompt.format(
-            function_description=user_input,
-            repo_path=repo_path,
-            code_content=code_content
-        )
-        generated_code = self.llm.invoke(prompt).content
-        return generated_code
+#         code_generation_prompt = """
+#         Here is the user's functional requirement: {function_description}.
+#         This is the code content cloned from the GitHub repository {repo_path}:
+#         {code_content}
+#         Please generate the code that meets the user's requirement based on this information.
+#         """
+#         print(code_content)
+#         prompt = code_generation_prompt.format(
+#             function_description=user_input,
+#             repo_path=repo_path,
+#             code_content=code_content
+#         )
+#         generated_code = self.llm.invoke(prompt).content
+#         return generated_code
 
 
 class Assistant:
@@ -55,7 +55,6 @@ class Assistant:
             repos = searcher.search_repositories()
             all_repos.extend(repos)
 
-        generator = CodeGenerator()
         if not all_repos:
             print("No relevant repositories found.")
             generated_code = generator.generate_code(repo_path, code_description, None)

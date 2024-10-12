@@ -1,6 +1,5 @@
 import requests
 import os
-import requests
 import subprocess
 from langchain.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
