@@ -49,9 +49,9 @@ def run(code_description):
     bm25_retriever = BM25Retriever.from_documents(vector_store.docstore._dict.values())
     faiss_retriever = vector_store.as_retriever()
     ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, faiss_retriever], weights=[0.6, 0.4]
+        retrievers=[bm25_retriever, faiss_retriever], weights=[0.8, 0.2]
     )
-    similar_repo = ensemble_retriever.invoke(code_description)[0].metadata
+    similar_repo = ensemble_retriever.invoke(code_description)
     print(f"Best matching repository: {similar_repo}")
 
     # 6. 下载到本地
