@@ -14,6 +14,7 @@ from langchain.schema import Document
 from search import make_request
 from github import Github
 import time
+import json
 gh_token = os.getenv('GH_TOKEN')
 g = Github(gh_token)
 
@@ -53,9 +54,19 @@ def download_process(repo, db: FAISS):
                 'star': repo.stargazers_count,
             }
         )
-        split_docu = text_splitter.split_documents([docu])
+        json_docu = {
+            'repo_name':repo.full_name,
+            'repo_desc':repo.description,
+            'star':repo.stargazers_count,
+            "page_content":readme_content
+        }
+        # split_docu = text_splitter.split_documents([docu])
         with lock:
-            db.add_documents(split_docu)
+            with open("./readme.json", "a") as f:
+                json.dump(json_docu,f)
+                f.write('\n')
+                f.close()
+            db.add_documents([docu])
             
 
 def load_readme(repos, db: FAISS):
@@ -80,6 +91,29 @@ def clone_github_repo(repo_name, destination=None):
         print(f"Clone: {repo_name} to {destination}")
     except subprocess.CalledProcessError as e:
         print(f"Clone error: {e.stderr.decode()}")
+
+def pack_repo(destination, repo_name):
+    code_extensions = ['.py', '.js', '.cpp', '.h', '.cu', '.c', '.go', '.rb']
+    def get_all_code_files(directory):
+        code_files = []
+        for root, _, files in os.walk(directory):
+            for file in files:
+                if any(file.endswith(ext) for ext in code_extensions):
+                    code_files.append(os.path.join(root, file))
+        return code_files
+    def read_and_combine_code(files):
+        all_code = f'repo_name: {repo_name}\n begin'
+        for file_path in files:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                file_content = file.read()
+                all_code += f"// File: {file_path}\n"
+                all_code += file_content + "\n\n"
+        all_code += f'repo_name: {repo_name}\n end\n\n'
+        return all_code
+    code_files = get_all_code_files(destination)
+    combined_code = read_and_combine_code(code_files)
+    return combined_code
+
 
 if __name__ == '__main__':
     vector_store = FAISS(
