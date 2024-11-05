@@ -2,95 +2,19 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import time
-
-class PapersWithCodeScraper:
-    def __init__(self, max_papers=10000):
-        self.base_url = "https://paperswithcode.com"
-        self.headers = {"User-Agent": "Mozilla/5.0"}
-        self.max_papers = max_papers
-        self.papers = []
-
-    def fetch_paper_list(self, page):
-        """获取指定页面的论文列表"""
-        url = f"{self.base_url}/latest?page={page}"
-        response = requests.get(url, headers=self.headers, timeout=10)
-        if response.status_code == 200:
-            return response.text
-        return None
-
-    def parse_paper_list(self, html_content):
-        """解析页面中的论文列表并筛选出带有代码的论文"""
-        soup = BeautifulSoup(html_content, "html.parser")
-        papers = []
-        
-        for item in soup.select(".infinite-item"):
-            title_element = item.select_one(".item-title a")
-            code_link = item.select_one(".badge-primary[href*='github.com']")
-
-            if title_element and code_link:
-                paper = {
-                    "title": title_element.text.strip(),
-                    "paper_url": self.base_url + title_element['href'],
-                    "github_url": code_link['href']
-                }
-                papers.append(paper)
-
-        return papers
-
-    def fetch_abstract(self, paper_url):
-        """访问论文详情页面并提取摘要信息"""
-        try:
-            response = requests.get(paper_url, headers=self.headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, "html.parser")
-                abstract = soup.select_one(".paper-abstract")
-                return abstract.text.strip() if abstract else "No abstract available"
-        except requests.exceptions.RequestException as e:
-            print(f"Failed to fetch abstract from {paper_url}: {e}")
-        return "No abstract available"
-
-    def scrape(self):
-        """循环爬取论文直到达到目标数量"""
-        page = 1
-        while len(self.papers) < self.max_papers:
-            print(f"Fetching page {page}...")
-            html_content = self.fetch_paper_list(page)
-            if html_content:
-                new_papers = self.parse_paper_list(html_content)
-                
-                for paper in new_papers:
-                    if len(self.papers) >= self.max_papers:
-                        break
-                    # 获取论文的摘要信息
-                    paper['abstract'] = self.fetch_abstract(paper["paper_url"])
-                    self.papers.append(paper)
-                    print(f"Collected {len(self.papers)} papers")
-
-            if not new_papers:
-                print("No more papers found.")
-                break
-
-            page += 1
-            time.sleep(1)  # 添加延迟以防止请求过于频繁
-
-        self.papers = self.papers[:self.max_papers]
-
-    def save_to_jsonl(self, filename="papers_with_code.jsonl"):
-        """将结果保存到 JSON Lines 文件中"""
-        with open(filename, "w") as f:
-            for paper in self.papers:
-                json.dump({
-                    "title": paper["title"],
-                    "abstract": paper["abstract"],
-                    "github_url": paper["github_url"]
-                }, f)
-                f.write("\n")
+import os
+from github import Github
+from search import check_readme
+from dotenv import load_dotenv
+load_dotenv()
+gh_token = os.getenv('GH_TOKEN')
+g = Github(gh_token)
 
 paper_code = './links-between-papers-and-code.json'
 paper_abstract = './papers-with-abstracts.json'
+data_path = './papers.json'
 
-
-def main():
+def construct_data(paper_code, paper_abstract):
     paper_dict = {}
     with open(paper_abstract, 'r') as f:
         papers = json.load(f)
@@ -121,9 +45,27 @@ def main():
     with open('papers.json', 'w') as f:
         json.dump(paper_info, f, indent=4)
     
-
+def check_data(data_path):
+    with open(data_path, 'r') as f:
+        papers = json.load(f)
+    papers_cleaned = []
+    for paper in papers:
+        if len(papers_cleaned) == 50:
+            break
+        repo_url = paper['repo_info']['github_url']
+        if 'github' not in repo_url:
+            continue
+        repo_name = '/'.join(repo_url.split('/')[-2:])
+        try:
+            repo = g.get_repo(repo_name)
+            _, __ = check_readme(repo, least_star=50)
+            if _:
+                print(repo_name)
+                papers_cleaned.append(paper)
+        except:
+            continue
+    with open('papers_cleaned.json', 'w') as f:
+        json.dump(papers_cleaned, f, indent=4)
 
 if __name__ == "__main__":
-    with open('papers.json', 'r') as f:
-        papers = json.load(f)
-        print(len(papers))
+    check_data(data_path)

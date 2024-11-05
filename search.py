@@ -40,9 +40,10 @@ def save_json(data, file_path):
 
     print(f"save repos to {file_path}")
 
-def check_readme(repo):
+def check_readme(repo, least_star=0):
     try:
         contents = repo.get_contents("")
+        star_count = repo.stargazers_count
     except Exception as e:
         print(f"Error: {e}")
         return False, False
@@ -62,6 +63,9 @@ def check_readme(repo):
                 contains_source = True
             if file.name.lower().startswith('readme'):
                 contains_readme = True
+    
+    if star_count < least_star:
+        return False, False
 
     return contains_source, contains_readme
 
