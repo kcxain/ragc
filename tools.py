@@ -13,10 +13,9 @@ import faiss
 embeddings = OpenAIEmbeddings()
 
 def download_readme_to_db(keywords: List[str]) -> Annotated[str, "path of vector database"]:
-    keywords = [keyword.lower().strip() for keyword in keywords][:1]
-    keywords = ["gaussian splatting"]
+    keywords = [keyword.lower().strip() for keyword in keywords]
     db_path = check_local(keywords)
-    # vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
+    vector_store = FAISS.load_local(db_path, embeddings, allow_dangerous_deserialization=True)
     if not db_path:
         repos = search_github(keywords, 1)
         vector_store = FAISS(

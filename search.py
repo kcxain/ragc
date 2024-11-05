@@ -79,7 +79,7 @@ def search_github(keywords: list, pages):
     repos_set = set()
     for keyword in keywords:
         meta_json = []
-        repositories = g.search_repositories(query=keyword,sort='updated',order='desc')
+        repositories = g.search_repositories(query=keyword,sort='stars',order='desc')
         print(f'Totle repo: {repositories.totalCount}')
         for repo in repositories:
             rate_limit = g.get_rate_limit().core
