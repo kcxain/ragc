@@ -51,11 +51,11 @@ def run(code_description):
     # print(similar_repo)
 
     # 6. 组合起来
-    prompt = '\n\n'.join([f'repo_name_{i}: {repo.metadata["repo_name"]}, repo_readme{i}: {repo.page_content}' for i, repo in enumerate(similar_repo)])
+    # prompt = '\n\n'.join([f'repo_name_{i}: {repo.metadata["repo_name"]}, repo_readme{i}: {repo.page_content}' for i, repo in enumerate(similar_repo)])
     # print(f"Best matching repository: {similar_repo}")
-    result = similar_repo[0].metadata["repo_name"]
+    # result = similar_repo[0].metadata["repo_name"]
     try: 
-        result = review_query_text(code_description, prompt)
+        result = review_query_text(code_description, similar_repo)
     except:
         pass
     return {
@@ -120,23 +120,31 @@ def get_query_text(function_description):
     return llm.invoke(prompt).content
 
 @retry(wait=wait_random_exponential(min=1, max=60), retry=retry_if_exception_type((openai.RateLimitError, openai.APIConnectionError)))
-def review_query_text(function_description, repos):
+def review_query_text(function_description, similar_repos):
     prompt_template = PromptTemplate(
         input_variables=["function_description"],
         template="""
-        You are an AI assistant tasked with reviewing the 5 repo README and selecting the best match for the user's algorithm requirements.
+        You are an AI assistant, analyze the README of a repo with user's requirments and determine if the repository satisfies all of the user's requirments.
 
         User Requirement:
         {function_description}
 
-        5 repos with README:
-        {repos}
+        README of the repo:
+        {repo_readme}
 
-        Please return the name of one repo only with json format.
+        Please analyze first, and then ouput `True` if the repo satisfies all the requirments, otherwise output `False`.
         """
     )
-    prompt = prompt_template.format(function_description=function_description, repos=repos)
-    return llm.invoke(prompt, response_format={"type": "json_object"}).content
+    results = []
+    for i, repo in enumerate(similar_repos):
+        repo_readme = repo.page_content
+        prompt = prompt_template.format(function_description=function_description, repo_readme=repo_readme)
+        result = llm.invoke(prompt).content
+        # with open('review.txt', 'a') as f:
+        #     f.write(result + '\n')
+        if 'true' in result.lower():
+            results.append(repo.metadata['repo_name'])
+    return results
     
 
 def eval_papers_with_code():

@@ -1,0 +1,14 @@
+True
+False
+Based on the analysis of the README of the repo, here is the assessment:
+
+1. Support cycle-level simulation: The repo supports cycle-level simulation for modeling multi-core NPUs.
+2. Main language is C++ or Python: The repo uses C++ as the main language.
+3. NPU contains memory module (DRAM simulation part): The repo supports cycle-level simulation of memory through Ramulator, which fulfills the requirement.
+4. Hardware configurable through configuration files: The repo provides example NPU configuration files in JSON format in the `configs` directory.
+5. Input file for operations to be simulated: ONNXim requires ONNX graph files (.onnx) to simulate DNN models.
+
+Based on the analysis, the repo satisfies all the user requirements. Therefore, the output is `True`.
+False
+False
+False
