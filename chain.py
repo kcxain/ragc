@@ -10,6 +10,7 @@ from search import search_github
 from download import load_readme, clone_github_repo
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
+import json
 load_dotenv()
 
 openai_key = os.getenv('OPENAI_API_KEY')
@@ -25,7 +26,7 @@ def run(code_description):
     print("Generating query keywords...")
     # 1. LLM 生成关键词
     keywords = get_query_keywords(code_description).split(',')
-    keywords = [keyword.lower().strip() for keyword in keywords][:1]
+    keywords = [keyword.lower().strip() for keyword in keywords]
     print(keywords)
 
     # 2. 判断有无缓存
@@ -35,6 +36,8 @@ def run(code_description):
     else:
     # 3. 返回仓库列表
         repos = search_github(keywords, 1)
+        if len(repos) == 0:
+            return None
     # 4. 下载所有仓库readme到数据库
         vector_store = FAISS(
                         embedding_function=embeddings,
@@ -49,15 +52,26 @@ def run(code_description):
     bm25_retriever = BM25Retriever.from_documents(vector_store.docstore._dict.values())
     faiss_retriever = vector_store.as_retriever()
     ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, faiss_retriever], weights=[0.8, 0.2]
+        retrievers=[bm25_retriever, faiss_retriever], weights=[0.6, 0.4]
     )
-    similar_repo = ensemble_retriever.invoke(code_description)
-    print(similar_repo)
+    query_readme = get_query_text(code_description)
+    similar_repo = ensemble_retriever.invoke(query_readme)
+    # print(similar_repo)
 
     # 6. 组合起来
     prompt = '\n\n'.join([f'repo_name_{i}: {repo.metadata["repo_name"]}, repo_readme{i}: {repo.page_content}' for i, repo in enumerate(similar_repo)])
     # print(f"Best matching repository: {similar_repo}")
-    print(review_query_text(code_description, prompt))
+    result = similar_repo[0].metadata["repo_name"]
+    try: 
+        result = review_query_text(code_description, prompt)
+    except:
+        pass
+    return {
+        'result': result,
+        'top5': [repo.metadata["repo_name"] for repo in similar_repo],
+        'keywords': keywords,
+        'text': query_readme
+    }
     # 6. 下载到本地
     # repo_name = similar_repo.metadata['repo_name']
     # clone_github_repo(repo_name)
@@ -85,7 +99,7 @@ def get_query_keywords(function_description):
         2. Include both technical terms and common phrases related to the functionality described.
         3. Avoid unnecessary words or overly generic terms.
         4. Each keyword covers all user requirements as much as possible
-        5. To minimize the search results, avoid using overly broad terms, such as 'cpp' or 'algorithm'
+        5. To minimize the search results, avoid using overly broad terms, such as 'cpp' or 'algorithm' or 'rnn'.
 
         Please return the keywords as a comma-separated list without any additional commentary.
         """
@@ -102,9 +116,9 @@ def get_query_text(function_description):
         User Requirement:
         {function_description}
 
-        Your task is to generate a README text that aligns as closely as possible with the user's specified algorithm requirements and search the top related repos. 
+        Your task is to generate a README text that aligns as closely as possible with the user's specified algorithm requirements and search the top related repos.
         The README must highlight and prioritize the user's specific needs, such as programming language, hardware compatibility (CPU/GPU), performance optimization, and any other explicit details provided in the algorithm description.
-
+        You should focus on writing the function description and feature sections of the README with about 100 words, and avoid writing other content.
         Please return the text only.
         """
     )
@@ -130,5 +144,16 @@ def review_query_text(function_description, repos):
     return llm.invoke(prompt, response_format={"type": "json_object"}).content
     
 if __name__ == '__main__':
-    user_input = "Gaussian Splatting with C kernel on the CPU"
-    run(user_input)
+    with open('./papers_cleaned.json', 'r') as f:
+        inputs = json.load(f)
+    with open('./papers_cleaned_results.json', 'a') as f: 
+        for input in inputs[16:]:
+            code_description = f"""
+            Provide the most relevant GitHub repository about the following title and abstract: {input['abstract']}
+            """
+            result = run(code_description)
+            f.write(json.dumps({
+                'title': input['title'],
+                'result': result
+            }) + '\n')
+            f.flush()

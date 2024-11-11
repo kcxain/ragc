@@ -104,8 +104,8 @@ def search_github(keywords: list, pages):
             repos.append(repo)
             cnt += 1
             meta_json.append(meta_data)
-            print(f'{cnt}:  {meta_data}')
-        save_json(meta_json, f'./{keyword}.json')
+            print(f'{cnt}:  {repo.full_name}')
+        save_json(meta_json, f'./1105_test/{keyword}.json')
         time.sleep(10)
     print(f'Total {cnt} valid repos!')
     return repos
