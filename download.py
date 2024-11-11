@@ -1,6 +1,6 @@
 import os
 import subprocess
-import base64
+import openai
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from langchain_openai import OpenAIEmbeddings
@@ -15,6 +15,12 @@ from search import make_request
 from github import Github
 import time
 import json
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    wait_random_exponential,
+)  # for exponential backoff
+
 gh_token = os.getenv('GH_TOKEN')
 g = Github(gh_token)
 
@@ -35,6 +41,7 @@ text_splitter = RecursiveCharacterTextSplitter(
     is_separator_regex=False,
 )
 
+@retry(wait=wait_random_exponential(min=1, max=60), retry=retry_if_exception_type((openai.RateLimitError, openai.APIConnectionError)))
 def download_process(repo, db: FAISS):
     rate_limit = g.get_rate_limit().core
     if rate_limit.remaining == 0:
@@ -67,7 +74,16 @@ def download_process(repo, db: FAISS):
                 f.write('\n')
                 f.close()
             db.add_documents([docu])
-            
+
+@retry(wait=wait_random_exponential(min=1, max=60), retry=retry_if_exception_type((openai.RateLimitError, openai.APIConnectionError)))
+def init_db():
+    vector_store = FAISS(
+        embedding_function=embeddings,
+        index=faiss.IndexFlatL2(len(embeddings.embed_query("hello world"))),
+        docstore=InMemoryDocstore(),
+        index_to_docstore_id={},
+    )
+    return vector_store
 
 def load_readme(repos, db: FAISS):
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -114,6 +130,18 @@ def pack_repo(destination, repo_name):
     combined_code = read_and_combine_code(code_files)
     return combined_code
 
+def load_vector_db(repos):
+    vector_store = init_db()
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(download_process, repo, vector_store): repo for repo in repos}
+        
+        for future in as_completed(futures):
+            repo = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                print(f"{repo.full_name} download error: {e}")
+    return vector_store
 
 if __name__ == '__main__':
     vector_store = FAISS(

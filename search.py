@@ -1,11 +1,19 @@
 import requests
 import os
 import time
+import openai
 from dotenv import load_dotenv
 load_dotenv()
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from github import Github
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers import EnsembleRetriever
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    wait_random_exponential,
+)  # for exponential backoff
 import json
 gh_token = os.getenv('GH_TOKEN')
 g = Github(gh_token)
@@ -41,33 +49,40 @@ def save_json(data, file_path):
     print(f"save repos to {file_path}")
 
 def check_readme(repo, least_star=0):
-    try:
-        contents = repo.get_contents("")
-        star_count = repo.stargazers_count
-    except Exception as e:
-        print(f"Error: {e}")
-        return False, False
+    while True:
+        cnt = 0
+        try:
+            contents = repo.get_contents("")
+            star_count = repo.stargazers_count
+            break
+        except Exception as e:
+            cnt += 1
+            if cnt > 3:
+                print(f"Error: {e}")
+                return False
+            time.sleep(5)
+            continue
     
     source_file_extensions = [
         '.py', '.js', '.ts', '.cpp', '.c', '.java', '.rb', 
         '.go', '.php', '.html', '.css', '.swift', '.kt', 
-        '.rs', '.cu'
+        '.rs', '.cu', 
+        # 模拟器
+        '.hpp', '.h'
     ]
     
     contains_readme = False
     contains_source = False
+    star_satify = star_count >= least_star
 
     for file in contents:
         if file.type == 'file':
-            if any(file.name.endswith(ext) for ext in source_file_extensions):
+            if any(file.path.endswith(ext) for ext in source_file_extensions):
                 contains_source = True
-            if file.name.lower().startswith('readme'):
+            if 'readme' in file.path.lower():
                 contains_readme = True
-    
-    if star_count < least_star:
-        return False, False
 
-    return contains_source, contains_readme
+    return all((contains_source, contains_readme, star_satify))
 
 
 def search_github(keywords: list, pages):
@@ -92,10 +107,8 @@ def search_github(keywords: list, pages):
                 continue
             else:
                 repos_set.add(repo_name)
-
-            contains_source, contains_readme = check_readme(repo)
-            if not contains_source or not contains_readme:
-                continue
+            # if not check_readme(repo):
+            #     continue
             meta_data = {
                 'repo_name' : repo.full_name,
                 'repo_desc' : repo.description,
@@ -109,7 +122,16 @@ def search_github(keywords: list, pages):
         time.sleep(10)
     print(f'Total {cnt} valid repos!')
     return repos
-            
+
+@retry(wait=wait_random_exponential(min=1, max=60), retry=retry_if_exception_type((openai.RateLimitError, openai.APIConnectionError)))
+def search_db(db, query):
+    bm25_retriever = BM25Retriever.from_documents(db.docstore._dict.values())
+    faiss_retriever = db.as_retriever()
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, faiss_retriever], weights=[0.6, 0.4]
+    )
+    similar_repo = ensemble_retriever.invoke(query)
+    return similar_repo
 
 if __name__ == '__main__':
     search_github('diff-gaussian', 2)
